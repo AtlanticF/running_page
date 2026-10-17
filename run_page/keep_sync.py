@@ -24,6 +24,7 @@ from config import (
 from Crypto.Cipher import AES
 from generator import Generator
 
+from keep_time import keep_point_delta_deciseconds, keep_point_epoch_seconds
 from utils import adjust_time
 
 KEEP_SPORT_TYPES = ["running", "hiking", "cycling"]
@@ -48,8 +49,6 @@ RUN_DATA_API = "https://api.gotokeep.com/pd/v3/stats/detail?dateUnit=all&type={s
 RUN_LOG_API = "https://api.gotokeep.com/pd/v3/{sport_type}log/{run_id}"
 
 HR_FRAME_THRESHOLD_IN_DECISECOND = 100  # Maximum time difference to consider a data point as the nearest, the unit is decisecond(分秒)
-
-TIMESTAMP_THRESHOLD_IN_DECISECOND = 3_600_000  # Threshold for target timestamp adjustment, the unit of timestamp is decisecond(分秒), so the 3_600_000 stands for 100 hours sports time. 100h = 100 * 60 * 60 * 10
 
 # If your points need trans from gcj02 to wgs84 coordinate which use by Mapbox
 TRANS_GCJ02_TO_WGS84 = True
@@ -147,6 +146,9 @@ def parse_raw_data_to_nametuple(
                 p["longitude"] = run_points_data[i][1]
 
         for p in run_points_data_gpx:
+            # unixTimestamp is Unix milliseconds. Keep it on `timestamp` only
+            # when the point has no elapsed/absolute `timestamp` of its own;
+            # keep_point_epoch_seconds tells the two clocks apart.
             if "timestamp" not in p:
                 if "unixTimestamp" in p:
                     p["timestamp"] = p["unixTimestamp"]
@@ -269,21 +271,14 @@ def parse_points_to_gpx(run_points_data, start_time, sport_type):
         gpx_data (str): GPX data in string format.
     """
     points_dict_list = []
-    # early timestamp fields in keep's data stands for delta time, but in newly data timestamp field stands for exactly time,
-    # so it doesn't need to plus extra start_time
-    if (
-        run_points_data
-        and run_points_data[0]["timestamp"] > TIMESTAMP_THRESHOLD_IN_DECISECOND
-    ):
-        start_time = 0
-
+    # Decide the unit per point. One absolute unixTimestamp must not throw away
+    # startTime for the rest of the track, and milliseconds are not deciseconds.
     for point in run_points_data:
         points_dict = {
             "latitude": point["latitude"],
             "longitude": point["longitude"],
-            # note that the timestamp of a point is decisecond(分秒)
             "time": datetime.fromtimestamp(
-                (start_time // 1000 + point["timestamp"] // 10),
+                keep_point_epoch_seconds(point["timestamp"], start_time),
                 tz=UTC,
             ),
             "elevation": point.get("altitude"),
@@ -382,9 +377,10 @@ def parse_points_to_tcx(run_data, run_points_data, sport_type):
         tp = ET.Element("Trackpoint")
         track.append(tp)
         # Time
-        # note that the timestamp of a point is decisecond(分秒)
         time_stamp = datetime.fromtimestamp(
-            (run_data.get("startTime") // 1000 + point.get("timestamp") // 10),
+            keep_point_epoch_seconds(
+                point.get("timestamp"), run_data.get("startTime")
+            ),
             tz=UTC,
         ).strftime("%Y-%m-%dT%H:%M:%SZ")
         time_label = ET.Element("Time")
@@ -444,9 +440,7 @@ def find_nearest_hr(
     closest_element = None
     # init difference value
     min_difference = float("inf")
-    if target_time > TIMESTAMP_THRESHOLD_IN_DECISECOND:
-        # note that the unit of target_time is decisecond and the unit of start_time is normal millisecond
-        target_time = target_time - start_time // 100
+    target_time = keep_point_delta_deciseconds(target_time, start_time)
 
     for item in hr_data_list:
         timestamp = item.get("timestamp")
