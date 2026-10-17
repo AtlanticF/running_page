@@ -40,7 +40,9 @@ export function RouteMapCanvas({
   const styleReadyRef = useRef(false);
   const cameraRef = useRef<mapboxgl.CameraOptions | null>(null);
   const fittedRef = useRef<unknown>(null);
-  const [provider, setProvider] = useState(MAPBOX_TOKEN ? 'mapbox' : 'carto');
+  const [provider, setProvider] = useState(
+    MAPBOX_TOKEN ? 'mapbox' : 'openfreemap'
+  );
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
     'loading'
   );
@@ -48,7 +50,7 @@ export function RouteMapCanvas({
   const style =
     provider === 'mapbox'
       ? `mapbox://styles/mapbox/${dark === false ? 'light' : 'dark'}-v11`
-      : `https://basemaps.cartocdn.com/gl/${dark === false ? 'positron' : 'dark-matter'}-gl-style/style.json`;
+      : `https://tiles.openfreemap.org/styles/${dark === false ? 'bright' : 'dark'}`;
 
   const displayActivity = useMemo(
     () =>
@@ -207,7 +209,7 @@ export function RouteMapCanvas({
     const onError = (event: mapboxgl.ErrorEvent) => {
       const code = (event.error as Error & { status?: number }).status;
       if (provider === 'mapbox' && (code === 401 || code === 403)) {
-        setProvider('carto');
+        setProvider('openfreemap');
       } else {
         failed = true;
         setStatus('error');
@@ -340,23 +342,24 @@ export function RouteMapCanvas({
               ? zh
                 ? '正在加载地图…'
                 : 'Loading map…'
-              : provider === 'carto'
+              : provider === 'openfreemap'
                 ? zh
-                  ? '备用底图 · CARTO'
-                  : 'Alternative basemap · CARTO'
+                  ? '底图 · OpenFreeMap'
+                  : 'Basemap · OpenFreeMap'
                 : zh
                   ? '底图 · Mapbox'
                   : 'Basemap · Mapbox'}
         </span>
-        {(status === 'error' || (provider === 'carto' && !!MAPBOX_TOKEN)) && (
+        {(status === 'error' ||
+          (provider === 'openfreemap' && !!MAPBOX_TOKEN)) && (
           <button
             className="route-map-action"
             onClick={() => {
-              setProvider(MAPBOX_TOKEN ? 'mapbox' : 'carto');
+              setProvider(MAPBOX_TOKEN ? 'mapbox' : 'openfreemap');
               setRetry((value) => value + 1);
             }}
           >
-            {provider === 'carto' && MAPBOX_TOKEN
+            {provider === 'openfreemap' && MAPBOX_TOKEN
               ? zh
                 ? '重试 Mapbox'
                 : 'Retry Mapbox'
