@@ -2,11 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import * as polyline from '@mapbox/polyline';
+import gcoord from 'gcoord';
 import type { Activity } from '../types';
 import { hasRoute, routeForActivity } from '../core/routeFallback';
+import { amapRasterStyle } from '../core/basemap';
 import { MAPBOX_TOKEN } from '../config';
 import { useLocale } from '../hooks/useLocale';
 import './RouteMap.css';
+
+// mapbox-gl v3 clears the canvas unless it has a public token, even for
+// third-party tiles. This is only the library handshake, not the basemap.
+const MAPBOX_GL_TOKEN =
+  MAPBOX_TOKEN ||
+  'pk.eyJ1IjoieWlob25nMDYxOCIsImEiOiJjbWYxdXR4YncwMTJtMm5zOTE4eTZpMGdtIn0.OnsXdwkZFztR8a5Ph_T-xg';
 
 export interface RouteMapProps {
   activities: Activity[];
@@ -40,17 +48,20 @@ export function RouteMapCanvas({
   const styleReadyRef = useRef(false);
   const cameraRef = useRef<mapboxgl.CameraOptions | null>(null);
   const fittedRef = useRef<unknown>(null);
-  const [provider, setProvider] = useState(
-    MAPBOX_TOKEN ? 'mapbox' : 'openfreemap'
+  const [provider, setProvider] = useState<'mapbox' | 'amap'>(
+    MAPBOX_TOKEN ? 'mapbox' : 'amap'
   );
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
     'loading'
   );
   const [retry, setRetry] = useState(0);
-  const style =
-    provider === 'mapbox'
-      ? `mapbox://styles/mapbox/${dark === false ? 'light' : 'dark'}-v11`
-      : `https://tiles.openfreemap.org/styles/${dark === false ? 'bright' : 'dark'}`;
+  const style = useMemo(
+    () =>
+      provider === 'mapbox'
+        ? `mapbox://styles/mapbox/${dark === false ? 'light' : 'dark'}-v11`
+        : amapRasterStyle(),
+    [provider, dark]
+  );
 
   const displayActivity = useMemo(
     () =>
@@ -69,35 +80,49 @@ export function RouteMapCanvas({
         : []
       : activities;
     return items.flatMap((activity) => {
-      const cached = routeCache.get(activity);
-      if (cached) return cached;
-      if (!activity.summary_polyline) return [];
-      try {
-        const coordinates = polyline
-          .decode(activity.summary_polyline)
-          .map(([lat, lng]) => [lng, lat])
-          .filter(
-            ([lng, lat]) =>
-              Number.isFinite(lng) &&
-              Number.isFinite(lat) &&
-              Math.abs(lng) <= 180 &&
-              Math.abs(lat) <= 90
-          );
-        if (coordinates.length < 2) return [];
-        const features = [
-          {
-            type: 'Feature' as const,
-            properties: { type: activity.type },
-            geometry: { type: 'LineString' as const, coordinates },
-          },
-        ];
-        routeCache.set(activity, features);
-        return features;
-      } catch {
-        return [];
+      let features = routeCache.get(activity);
+      if (!features) {
+        if (!activity.summary_polyline) return [];
+        try {
+          const coordinates = polyline
+            .decode(activity.summary_polyline)
+            .map(([lat, lng]) => [lng, lat])
+            .filter(
+              ([lng, lat]) =>
+                Number.isFinite(lng) &&
+                Number.isFinite(lat) &&
+                Math.abs(lng) <= 180 &&
+                Math.abs(lat) <= 90
+            );
+          if (coordinates.length < 2) return [];
+          features = [
+            {
+              type: 'Feature' as const,
+              properties: { type: activity.type },
+              geometry: { type: 'LineString' as const, coordinates },
+            },
+          ];
+          routeCache.set(activity, features);
+        } catch {
+          return [];
+        }
       }
+      if (provider !== 'amap') return features;
+      return features.map((feature) => ({
+        ...feature,
+        geometry: {
+          ...feature.geometry,
+          coordinates: feature.geometry.coordinates.map(
+            ([lng, lat]) =>
+              gcoord.transform([lng, lat], gcoord.WGS84, gcoord.GCJ02) as [
+                number,
+                number,
+              ]
+          ),
+        },
+      }));
     });
-  }, [activities, selectedActivity, displayActivity]);
+  }, [activities, selectedActivity, displayActivity, provider]);
 
   const routeBounds = useMemo(() => {
     const bounds = new mapboxgl.LngLatBounds();
@@ -159,7 +184,7 @@ export function RouteMapCanvas({
     if (!containerRef.current || !panelRef.current) return;
     const map = new mapboxgl.Map({
       container: containerRef.current,
-      accessToken: MAPBOX_TOKEN,
+      accessToken: MAPBOX_GL_TOKEN,
       language: zh ? 'zh-Hans' : 'en',
       style: { version: 8, sources: {}, layers: [] },
       center: [121.4, 31.2],
@@ -207,13 +232,19 @@ export function RouteMapCanvas({
     if (!map) return;
     let failed = false;
     const onError = (event: mapboxgl.ErrorEvent) => {
-      const code = (event.error as Error & { status?: number }).status;
+      const error = event.error as Error & { status?: number };
+      const code = error.status;
       if (provider === 'mapbox' && (code === 401 || code === 403)) {
-        setProvider('openfreemap');
-      } else {
-        failed = true;
-        setStatus('error');
+        setProvider('amap');
+        return;
       }
+      // Moving the camera aborts in-flight tiles. That is not a basemap failure.
+      if (error.name === 'AbortError' || /abort|cancel/i.test(error.message)) {
+        return;
+      }
+      if ('sourceId' in event && event.sourceId) return;
+      failed = true;
+      setStatus('error');
     };
     const onIdle = () => {
       if (!failed) setStatus('ready');
@@ -342,24 +373,23 @@ export function RouteMapCanvas({
               ? zh
                 ? '正在加载地图…'
                 : 'Loading map…'
-              : provider === 'openfreemap'
+              : provider === 'amap'
                 ? zh
-                  ? '底图 · OpenFreeMap'
-                  : 'Basemap · OpenFreeMap'
+                  ? '底图 · 高德'
+                  : 'Basemap · Amap'
                 : zh
                   ? '底图 · Mapbox'
                   : 'Basemap · Mapbox'}
         </span>
-        {(status === 'error' ||
-          (provider === 'openfreemap' && !!MAPBOX_TOKEN)) && (
+        {(status === 'error' || (provider === 'amap' && !!MAPBOX_TOKEN)) && (
           <button
             className="route-map-action"
             onClick={() => {
-              setProvider(MAPBOX_TOKEN ? 'mapbox' : 'openfreemap');
+              setProvider(MAPBOX_TOKEN ? 'mapbox' : 'amap');
               setRetry((value) => value + 1);
             }}
           >
-            {provider === 'openfreemap' && MAPBOX_TOKEN
+            {provider === 'amap' && MAPBOX_TOKEN
               ? zh
                 ? '重试 Mapbox'
                 : 'Retry Mapbox'
