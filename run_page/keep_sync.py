@@ -23,8 +23,8 @@ from config import (
 )
 from Crypto.Cipher import AES
 from generator import Generator
-
 from keep_time import keep_point_delta_deciseconds, keep_point_epoch_seconds
+
 from utils import adjust_time
 
 KEEP_SPORT_TYPES = ["running", "hiking", "cycling"]

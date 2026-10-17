@@ -71,10 +71,7 @@ def repair_keep_gpx_times(xml_text):
     matches = list(_TIME_RE.finditer(xml_text))
     if len(matches) < 2:
         return None
-    moments = [
-        datetime.fromisoformat(match.group(1).replace("Z", "+00:00"))
-        for match in matches
-    ]
+    moments = [datetime.fromisoformat(match.group(1)) for match in matches]
     if moments[0].year < 3000:
         return None
     if any(moment.year >= 3000 for moment in moments[1:]):
