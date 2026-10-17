@@ -3,6 +3,8 @@ import gcoord from 'gcoord';
 import { WebMercatorViewport } from '@math.gl/web-mercator';
 import type { FeatureCollection, LineString, Feature } from 'geojson';
 import type { GeoJsonProperties } from 'geojson';
+import type { StyleSpecification } from 'mapbox-gl';
+import { amapRasterStyle } from '../../../core/basemap';
 import type { RPGeometry } from '../static/run_countries';
 import worldGeoJsonUrl from '../static/world.zh.json?url';
 import { getMapThemeFromCurrentTheme } from '../hooks/useTheme';
@@ -15,6 +17,7 @@ import {
   MAIN_COLOR,
   MAP_TILE_STYLE_DARK,
   MAP_TILE_STYLES,
+  MAP_TILE_VENDOR,
   NEED_FIX_MAP,
   RUN_TRAIL_COLOR,
   SWIMMING_COLOR,
@@ -39,6 +42,16 @@ export const pathForRun = (run: Activity): Coordinate[] => {
     const c = mapboxPolyline.decode(run.summary_polyline);
     // reverse lat long for mapbox
     c.forEach((arr) => {
+      // mapcn serves Gaode tiles, which use GCJ-02. GPS tracks are WGS-84.
+      const vendor: string = MAP_TILE_VENDOR;
+      if (vendor === 'mapcn' || vendor.startsWith('mapcn_')) {
+        [arr[0], arr[1]] = gcoord.transform(
+          [arr[1], arr[0]],
+          gcoord.WGS84,
+          gcoord.GCJ02
+        );
+        return;
+      }
       [arr[0], arr[1]] = !NEED_FIX_MAP
         ? [arr[1], arr[0]]
         : gcoord.transform([arr[1], arr[0]], gcoord.GCJ02, gcoord.WGS84);
@@ -178,7 +191,11 @@ export const getMapStyle = (
   vendor: string,
   styleName: string,
   token: string
-) => {
+): string | StyleSpecification => {
+  // Carto's free tiles are watermarked, and OpenFreeMap is often unreachable.
+  if (vendor === 'mapcn' || vendor.startsWith('mapcn_')) {
+    return amapRasterStyle();
+  }
   const style = getMapTileVendorStyles(vendor)?.[styleName];
   if (!style) {
     return MAP_TILE_STYLES.default;
