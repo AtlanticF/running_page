@@ -95,8 +95,17 @@ class Generator:
         synced_files = []
 
         for t in tracks:
+            # to_namedtuple may return None for tracks that were filtered/skipped
+            nt = t.to_namedtuple(run_from=file_suffix)
+            if nt is None:
+                # t.to_namedtuple already logs a human-readable message when skipping,
+                # record a short marker and continue without touching DB
+                sys.stdout.write("s")
+                sys.stdout.flush()
+                continue
+
             created = update_or_create_activity(
-                self.session, t.to_namedtuple(run_from=file_suffix)
+                self.session, nt
             )
             if created:
                 sys.stdout.write("+")
