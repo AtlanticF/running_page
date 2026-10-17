@@ -93,19 +93,26 @@ class Generator:
             return
 
         synced_files = []
+        total = len(tracks)
 
-        for t in tracks:
+        for index, t in enumerate(tracks, start=1):
+            fname = t.file_names[0] if t.file_names else ""
+            print(f"save {index}/{total} {fname}", flush=True)
             # to_namedtuple may return None for tracks that were filtered/skipped
             nt = t.to_namedtuple(run_from=file_suffix)
             if nt is None:
                 # t.to_namedtuple already logs a human-readable message when skipping,
                 # record a short marker and continue without touching DB
+                print(f"skip {index}/{total} {fname}", flush=True)
                 sys.stdout.write("s")
                 sys.stdout.flush()
                 continue
 
-            created = update_or_create_activity(
-                self.session, nt
+            print(f"upsert {index}/{total} {fname} id={nt.id}", flush=True)
+            created = update_or_create_activity(self.session, nt)
+            print(
+                f"upsert done {index}/{total} {fname} created={created}",
+                flush=True,
             )
             if created:
                 sys.stdout.write("+")
@@ -114,9 +121,11 @@ class Generator:
             synced_files.extend(t.file_names)
             sys.stdout.flush()
 
+        print(f"commit {len(synced_files)} files", flush=True)
         save_synced_data_file_list(synced_files)
 
         self.session.commit()
+        print("commit done", flush=True)
 
     def sync_from_app(self, app_tracks):
         if not app_tracks:
