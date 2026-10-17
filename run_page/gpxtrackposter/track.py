@@ -477,7 +477,7 @@ class Track:
                         f"Skip invalid track: id={self.run_id}, file={fname}, start_time={self.start_time.strftime('%Y-%m-%d %H:%M:%S')}, reason=year {sy} out of range ({MIN_YEAR}-{MAX_YEAR})"
                     )
                     return None
-        except Exception:
+        except Exception:  # noqa: BLE001
             # If start_time is broken, skip and log raw value
             print(
                 f"Skip invalid track: id={self.run_id}, file={fname}, start_time={self.start_time!s}, reason=cannot parse start_time"
@@ -492,7 +492,7 @@ class Track:
                         f"Skip invalid track: id={self.run_id}, file={fname}, start_time_local={self.start_time_local.strftime('%Y-%m-%d %H:%M:%S')}, reason=year {syl} out of range ({MIN_YEAR}-{MAX_YEAR})"
                     )
                     return None
-        except Exception:
+        except Exception:  # noqa: BLE001
             print(
                 f"Skip invalid track: id={self.run_id}, file={fname}, start_time_local={self.start_time_local!s}, reason=cannot parse start_time_local"
             )

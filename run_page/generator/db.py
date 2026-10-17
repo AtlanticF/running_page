@@ -81,11 +81,35 @@ class Activity(Base):
         return out
 
 
+def _reverse_country(lat, lon, run_id):
+    query = f"{lat}, {lon}"
+    for attempt in (1, 2):
+        print(
+            f"reverse geocode attempt {attempt} run_id={run_id} point={query}",
+            flush=True,
+        )
+        try:
+            location = g.reverse(query, language="zh-CN", timeout=15)
+            print(f"reverse geocode done run_id={run_id} -> {location}", flush=True)
+            return str(location) if location else ""
+        except Exception as e:  # noqa: BLE001
+            print(
+                f"reverse geocode failed run_id={run_id} attempt {attempt}: {e}",
+                flush=True,
+            )
+    return ""
+
+
 def update_or_create_activity(session, run_activity):
     created = False
     try:
+        print(f"db lookup run_id={run_activity.id}", flush=True)
         activity = (
             session.query(Activity).filter_by(run_id=int(run_activity.id)).first()
+        )
+        print(
+            f"db lookup done run_id={run_activity.id} found={activity is not None}",
+            flush=True,
         )
 
         current_elevation_gain = 0.0  # default value
@@ -107,26 +131,10 @@ def update_or_create_activity(session, run_activity):
             location_country = getattr(run_activity, "location_country", "")
             # or China for #176 to fix
             if not location_country and start_point or location_country == "China":
-                try:
-                    location_country = str(
-                        g.reverse(
-                            f"{start_point.lat}, {start_point.lon}",
-                            language="zh-CN",  # type: ignore
-                            timeout=15,
-                        )
-                    )
                 # limit (only for the first time)
-                except Exception:  # noqa: BLE001
-                    try:
-                        location_country = str(
-                            g.reverse(
-                                f"{start_point.lat}, {start_point.lon}",
-                                language="zh-CN",  # type: ignore
-                                timeout=15,
-                            )
-                        )
-                    except Exception:  # noqa: S110, BLE001
-                        pass
+                location_country = _reverse_country(
+                    start_point.lat, start_point.lon, run_activity.id
+                )
 
             activity = Activity(
                 run_id=run_activity.id,

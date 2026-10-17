@@ -82,10 +82,15 @@ class Generator:
             sys.stdout.flush()
         self.session.commit()
 
-    def sync_from_data_dir(self, data_dir, file_suffix="gpx", activity_title_dict=None):
+    def sync_from_data_dir(
+        self, data_dir, file_suffix="gpx", activity_title_dict=None, limit=None
+    ):
         loader = track_loader.TrackLoader()
         tracks = loader.load_tracks(
-            data_dir, file_suffix=file_suffix, activity_title_dict=activity_title_dict
+            data_dir,
+            file_suffix=file_suffix,
+            activity_title_dict=activity_title_dict,
+            limit=limit,
         )
         print(f"load {len(tracks)} tracks")
         if not tracks:
@@ -93,19 +98,26 @@ class Generator:
             return
 
         synced_files = []
+        total = len(tracks)
 
-        for t in tracks:
+        for index, t in enumerate(tracks, start=1):
+            fname = t.file_names[0] if t.file_names else ""
+            print(f"save {index}/{total} {fname}", flush=True)
             # to_namedtuple may return None for tracks that were filtered/skipped
             nt = t.to_namedtuple(run_from=file_suffix)
             if nt is None:
                 # t.to_namedtuple already logs a human-readable message when skipping,
                 # record a short marker and continue without touching DB
+                print(f"skip {index}/{total} {fname}", flush=True)
                 sys.stdout.write("s")
                 sys.stdout.flush()
                 continue
 
-            created = update_or_create_activity(
-                self.session, nt
+            print(f"upsert {index}/{total} {fname} id={nt.id}", flush=True)
+            created = update_or_create_activity(self.session, nt)
+            print(
+                f"upsert done {index}/{total} {fname} created={created}",
+                flush=True,
             )
             if created:
                 sys.stdout.write("+")
@@ -114,9 +126,11 @@ class Generator:
             synced_files.extend(t.file_names)
             sys.stdout.flush()
 
+        print(f"commit {len(synced_files)} files", flush=True)
         save_synced_data_file_list(synced_files)
 
         self.session.commit()
+        print("commit done", flush=True)
 
     def sync_from_app(self, app_tracks):
         if not app_tracks:
