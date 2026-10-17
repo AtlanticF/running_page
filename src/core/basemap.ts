@@ -3,10 +3,24 @@ import type { StyleSpecification } from 'mapbox-gl';
 const AMAP_HOSTS = ['01', '02', '03', '04'] as const;
 
 /**
- * Gaode raster tiles. Carto's free tiles now return an "API key required"
- * watermark, and OpenFreeMap is often unreachable.
+ * Gaode road tiles, flattened to a CARTO-like gray.
+ * The source image is colorful; raster paint drops rivers and province
+ * borders down to a faint gray so the route stays visible.
  */
-export function amapRasterStyle(): StyleSpecification {
+export function amapRasterStyle(dark: boolean): StyleSpecification {
+  const paint = dark
+    ? {
+        'raster-saturation': -1,
+        'raster-contrast': -0.62,
+        'raster-brightness-min': 0.26,
+        'raster-brightness-max': 0.055,
+      }
+    : {
+        'raster-saturation': -1,
+        'raster-contrast': -0.72,
+        'raster-brightness-min': 0.9,
+        'raster-brightness-max': 1,
+      };
   return {
     version: 8,
     sources: {
@@ -21,6 +35,13 @@ export function amapRasterStyle(): StyleSpecification {
         attribution: '© 高德地图',
       },
     },
-    layers: [{ id: 'amap', type: 'raster', source: 'amap' }],
+    layers: [
+      {
+        id: 'background',
+        type: 'background',
+        paint: { 'background-color': dark ? '#1e1e1e' : '#f5f5f5' },
+      },
+      { id: 'amap', type: 'raster', source: 'amap', paint },
+    ],
   };
 }

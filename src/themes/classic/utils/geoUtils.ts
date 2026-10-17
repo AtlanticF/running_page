@@ -194,7 +194,7 @@ export const getMapStyle = (
 ): string | StyleSpecification => {
   // Carto's free tiles are watermarked, and OpenFreeMap is often unreachable.
   if (vendor === 'mapcn' || vendor.startsWith('mapcn_')) {
-    return amapRasterStyle();
+    return amapRasterStyle(styleName.includes('dark'));
   }
   const style = getMapTileVendorStyles(vendor)?.[styleName];
   if (!style) {

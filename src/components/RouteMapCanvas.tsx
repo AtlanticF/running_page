@@ -59,7 +59,7 @@ export function RouteMapCanvas({
     () =>
       provider === 'mapbox'
         ? `mapbox://styles/mapbox/${dark === false ? 'light' : 'dark'}-v11`
-        : amapRasterStyle(),
+        : amapRasterStyle(dark !== false),
     [provider, dark]
   );
 
