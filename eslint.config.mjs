@@ -15,15 +15,6 @@ const reactRulesAsWarnings = Object.fromEntries(
   })
 );
 
-const reactHooksRulesAsWarnings = Object.fromEntries(
-  Object.entries(reactHooks.configs.flat.recommended.rules).map(([rule, config]) => {
-    if (Array.isArray(config)) {
-      return [rule, ['warn', ...config.slice(1)]];
-    }
-    return [rule, 'warn'];
-  })
-);
-
 export default [
   {
     ignores: [
@@ -67,7 +58,7 @@ export default [
     settings: reactRecommended.settings,
     rules: {
       ...reactRulesAsWarnings,
-      ...reactHooksRulesAsWarnings,
+      ...reactHooks.configs.flat.recommended.rules,
       'react-hooks/set-state-in-effect': 'warn',
       'react-hooks/static-components': 'warn',
       'no-unused-vars': 'off',
