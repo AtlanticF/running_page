@@ -378,9 +378,7 @@ def parse_points_to_tcx(run_data, run_points_data, sport_type):
         track.append(tp)
         # Time
         time_stamp = datetime.fromtimestamp(
-            keep_point_epoch_seconds(
-                point.get("timestamp"), run_data.get("startTime")
-            ),
+            keep_point_epoch_seconds(point.get("timestamp"), run_data.get("startTime")),
             tz=UTC,
         ).strftime("%Y-%m-%dT%H:%M:%SZ")
         time_label = ET.Element("Time")
