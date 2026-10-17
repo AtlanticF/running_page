@@ -465,6 +465,39 @@ class Track:
         }
 
     def to_namedtuple(self, run_from="gpx"):
+        # Defensive check: ensure start_time and start_time_local are within reasonable range
+        MIN_YEAR = 1900
+        MAX_YEAR = 2200
+        fname = self.file_names[0] if self.file_names else ""
+        try:
+            if self.start_time is not None:
+                sy = self.start_time.year
+                if sy < MIN_YEAR or sy > MAX_YEAR:
+                    print(
+                        f"Skip invalid track: id={self.run_id}, file={fname}, start_time={self.start_time.strftime('%Y-%m-%d %H:%M:%S')}, reason=year {sy} out of range ({MIN_YEAR}-{MAX_YEAR})"
+                    )
+                    return None
+        except Exception:
+            # If start_time is broken, skip and log raw value
+            print(
+                f"Skip invalid track: id={self.run_id}, file={fname}, start_time={self.start_time!s}, reason=cannot parse start_time"
+            )
+            return None
+
+        try:
+            if self.start_time_local is not None:
+                syl = self.start_time_local.year
+                if syl < MIN_YEAR or syl > MAX_YEAR:
+                    print(
+                        f"Skip invalid track: id={self.run_id}, file={fname}, start_time_local={self.start_time_local.strftime('%Y-%m-%d %H:%M:%S')}, reason=year {syl} out of range ({MIN_YEAR}-{MAX_YEAR})"
+                    )
+                    return None
+        except Exception:
+            print(
+                f"Skip invalid track: id={self.run_id}, file={fname}, start_time_local={self.start_time_local!s}, reason=cannot parse start_time_local"
+            )
+            return None
+
         d = {
             "id": self.run_id,
             "name": (self.track_name if self.track_name else ""),  # maybe change later
