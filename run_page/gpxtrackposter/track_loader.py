@@ -74,25 +74,48 @@ class TrackLoader:
             "fit": load_fit_file,
         }
 
-    def load_tracks(self, data_dir, file_suffix="gpx", activity_title_dict=None):
+    def load_tracks(
+        self, data_dir, file_suffix="gpx", activity_title_dict=None, limit=None
+    ):
         """Load tracks data_dir and return as a List of tracks"""
         file_names = [x for x in self._list_data_files(data_dir, file_suffix)]
         print(f"{file_suffix.upper()} files: {len(file_names)}")
-
-        tracks = []
+        load_func = self.load_func_dict.get(file_suffix, load_gpx_file)
+        if limit is not None:
+            print(f"sync limit: {limit}")
+            return self._load_until_limit(
+                file_names, load_func, activity_title_dict, limit
+            )
 
         loaded_tracks = self._load_data_tracks(
             file_names,
-            self.load_func_dict.get(file_suffix, load_gpx_file),
+            load_func,
             activity_title_dict,
         )
-
-        tracks.extend(loaded_tracks.values())
         log.info(f"Conventionally loaded tracks: {len(loaded_tracks)}")
 
-        tracks = self._filter_tracks(tracks)
+        tracks = self._filter_tracks(list(loaded_tracks.values()))
         # filter out tracks with length < min_length
         return [t for t in tracks if t.length >= self.min_length]
+
+    def _load_until_limit(self, file_names, load_func, activity_title_dict, limit):
+        """Load files until `limit` tracks pass the usual filters."""
+        kept = []
+        for file_name in file_names:
+            if len(kept) >= limit:
+                break
+            try:
+                track = load_func(file_name, activity_title_dict)
+            except TrackLoadError as e:
+                log.error(f"Error while loading {file_name}: {e}")
+                continue
+            passed = [
+                item
+                for item in self._filter_tracks([track])
+                if item.length >= self.min_length
+            ]
+            kept.extend(passed)
+        return kept[:limit]
 
     def load_tracks_from_db(self, sql_file, is_grid=False):
         session = init_db(sql_file)

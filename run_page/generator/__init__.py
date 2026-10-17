@@ -82,10 +82,15 @@ class Generator:
             sys.stdout.flush()
         self.session.commit()
 
-    def sync_from_data_dir(self, data_dir, file_suffix="gpx", activity_title_dict=None):
+    def sync_from_data_dir(
+        self, data_dir, file_suffix="gpx", activity_title_dict=None, limit=None
+    ):
         loader = track_loader.TrackLoader()
         tracks = loader.load_tracks(
-            data_dir, file_suffix=file_suffix, activity_title_dict=activity_title_dict
+            data_dir,
+            file_suffix=file_suffix,
+            activity_title_dict=activity_title_dict,
+            limit=limit,
         )
         print(f"load {len(tracks)} tracks")
         if not tracks:

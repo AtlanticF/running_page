@@ -28,9 +28,11 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run GPX sync test
+        # One smoke test, one file. A PR push also fires `push`, so skip that
+        # copy. The full GPX_OUT sync stays in run_data_sync.yml / a local run.
+        if: matrix.python-version == '3.12' && (github.event_name == 'pull_request' || github.ref == 'refs/heads/master')
         run: |
-          # make sure the gpx_sync.py script is executable
-          python run_page/gpx_sync.py
+          python run_page/gpx_sync.py --limit 1
 
       - name: Check formatting (black)
         run: black . --diff --color && black . --check
